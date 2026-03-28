@@ -192,7 +192,7 @@
       <div class="flag-stripe yellow"></div>
       <div class="flag-stripe blue"></div>
     </div>
-    <h1>Speak Swedish<br><em>with Katrin</em></h1>
+    <h1>Svenska<br><em>Studio</em></h1>
     <p class="subtitle">Audio Transcription &amp; Translation Studio</p>
   </header>
 
@@ -253,6 +253,7 @@
   <div class="card progress-area" id="progress-area">
     <div class="card-title">Processing</div>
     <div class="step-list">
+      <div class="step" id="step-transcode"><span class="step-icon">🔄</span><span>Converting audio to M4A…</span></div>
       <div class="step" id="step-transcribe"><span class="step-icon">🎙️</span><span>Transcribing Swedish audio with Whisper…</span></div>
       <div class="step" id="step-translate"><span class="step-icon">🇸🇪</span><span>Translating to English with Claude…</span></div>
       <div class="step" id="step-vocab"><span class="step-icon">📖</span><span>Extracting vocabulary &amp; highlights…</span></div>
@@ -334,6 +335,7 @@ import { transcribe } from './src/transcribe.js';
 import { translateSegments, extractVocab } from './src/translate.js';
 import { saveSession, loadSession, buildSrt, downloadSrt } from './src/session.js';
 import { setStep, showError, clearError, showSection, hideSection, showTab, renderResults, showFilename, updateProcessBtn } from './src/ui.js';
+import { transcodeToM4A, isTranscodeSupported } from './src/transcode.js';
 
 // ── State ───────────────────────────────────────────────────────────────────
 let selectedFile = null;
@@ -409,13 +411,34 @@ sessionZone.addEventListener('drop', e => {
   if (e.dataTransfer.files[0]) handleSessionFile(e.dataTransfer.files[0]);
 });
 
-// ── API key watchers ────────────────────────────────────────────────────────
-document.getElementById('openai-key').addEventListener('input', () => updateProcessBtn(!!selectedFile, hasKeys()));
-document.getElementById('anthropic-key').addEventListener('input', () => updateProcessBtn(!!selectedFile, hasKeys()));
+// ── API key persistence (localStorage) ─────────────────────────────────────
+const LS_OPENAI = 'svenska_openai_key';
+const LS_ANTHROPIC = 'svenska_anthropic_key';
+
+(function restoreKeys() {
+  const oKey = localStorage.getItem(LS_OPENAI);
+  const aKey = localStorage.getItem(LS_ANTHROPIC);
+  if (oKey) document.getElementById('openai-key').value = oKey;
+  if (aKey) document.getElementById('anthropic-key').value = aKey;
+  updateProcessBtn(!!selectedFile, hasKeys());
+})();
+
+document.getElementById('openai-key').addEventListener('input', () => {
+  localStorage.setItem(LS_OPENAI, document.getElementById('openai-key').value);
+  updateProcessBtn(!!selectedFile, hasKeys());
+});
+document.getElementById('anthropic-key').addEventListener('input', () => {
+  localStorage.setItem(LS_ANTHROPIC, document.getElementById('anthropic-key').value);
+  updateProcessBtn(!!selectedFile, hasKeys());
+});
 
 function hasKeys() {
   return !!(document.getElementById('openai-key').value.trim() &&
             document.getElementById('anthropic-key').value.trim());
+}
+
+function needsTranscode(file) {
+  return file.type !== 'audio/mp4' && !file.name.endsWith('.m4a');
 }
 
 // ── Main pipeline ───────────────────────────────────────────────────────────
@@ -429,6 +452,28 @@ async function runPipeline() {
   hideSection('results-area');
 
   try {
+    // 0. Transcode (OGG → M4A for Apple device compatibility)
+    console.log('[pipeline] transcode check', {
+      isTranscodeSupported: isTranscodeSupported(),
+      needsTranscode: needsTranscode(selectedFile),
+      fileName: selectedFile?.name,
+      fileType: selectedFile?.type,
+    });
+    if (isTranscodeSupported() && needsTranscode(selectedFile)) {
+      setStep('step-transcode', 'active', 'Converting audio to M4A…');
+      try {
+        selectedFile = await transcodeToM4A(selectedFile, msg =>
+          setStep('step-transcode', 'active', msg)
+        );
+        console.log('[pipeline] selectedFile after transcode', { name: selectedFile.name, type: selectedFile.type, size: selectedFile.size });
+        setStep('step-transcode', 'done', 'Audio converted to M4A');
+      } catch (transcodeErr) {
+        setStep('step-transcode', 'error', 'Transcode failed: ' + transcodeErr.message);
+        console.error('[transcode]', transcodeErr);
+        // Fall through with original file — Whisper handles OGG fine
+      }
+    }
+
     // 1. Transcribe
     setStep('step-transcribe', 'active', 'Transcribing Swedish audio with Whisper…');
     const segments = await transcribe(selectedFile, openaiKey, msg =>

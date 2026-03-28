@@ -152,70 +152,91 @@ function bookmarkletSource() {
   var existing = document.getElementById(PANEL_ID);
   if (existing) { existing.remove(); return; }
 
-  // Collect OGG/voice URLs from every possible hiding spot Discord uses
-  var seen = {};
-  var links = [];
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-  function addURL(u) {
-    if (!u) return;
-    u = u.replace(/&amp;/g, '&').replace(/\\u0026/g, '&');
-    if (seen[u]) return;
-    // Only match Discord CDN voice message attachments — must contain /attachments/ and voice-message.ogg
-    if (/cdn\.discordapp\.com\/attachments\//i.test(u) && /voice-message\.ogg/i.test(u)) {
-      seen[u] = true; links.push(u);
-    }
+  function fmtDisplay(iso) {
+    var d = new Date(iso);
+    var h = d.getHours(), m = d.getMinutes();
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12 || 12;
+    return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + h12 + ':' + ('0'+m).slice(-2) + ' ' + ampm;
   }
 
-  // 1. <a href>
-  document.querySelectorAll('a[href]').forEach(function(a) { addURL(a.href); });
+  function fmtFilePart(iso) {
+    var d = new Date(iso);
+    var h = d.getHours(), m = d.getMinutes();
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12 || 12;
+    return MONTHS[d.getMonth()] + d.getDate() + '_' + h12 + '-' + ('0'+m).slice(-2) + ampm;
+  }
 
-  // 2. <audio src> and <audio><source src>
-  document.querySelectorAll('audio').forEach(function(el) {
-    addURL(el.src);
-    el.querySelectorAll('source').forEach(function(s) { addURL(s.src); });
-  });
+  function sanitizeSender(name) {
+    // Strip emojis and punctuation, keep letters/numbers/spaces (Unicode-aware), collapse to underscores
+    return name.replace(/[^\p{L}\p{N}\s]/gu, '').trim().replace(/\s+/g, '_') || 'voice';
+  }
 
-  // 3. All elements with a src attribute (Discord uses divs with data attrs)
-  document.querySelectorAll('[src]').forEach(function(el) { addURL(el.src || el.getAttribute('src')); });
+  var seen = {};
+  var items = [];
+  var fallbackN = 0;
 
-  // 4. Scan every element's dataset for CDN urls
-  document.querySelectorAll('*').forEach(function(el) {
-    Object.values(el.dataset || {}).forEach(function(v) {
-      if (typeof v === 'string' && /cdn\.discordapp\.com/i.test(v)) addURL(v);
-    });
-  });
-
-  // 5. Walk React fiber tree on known audio container elements
-  // Discord's voice messages have an aria-label or class containing "audioPlayer" / "voice"
-  var candidates = document.querySelectorAll(
-    '[class*="audioPlayer"], [class*="voiceMessage"], [class*="voice-message"], [aria-label*="voice"], [class*="VoiceMessage"]'
-  );
-  candidates.forEach(function(el) {
-    // Traverse React internal fiber to find the src prop
-    var fiberKey = Object.keys(el).find(function(k) { return k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'); });
-    if (!fiberKey) return;
-    var fiber = el[fiberKey];
-    var depth = 0;
-    while (fiber && depth < 40) {
-      var props = fiber.memoizedProps || fiber.pendingProps || {};
-      ['src', 'url', 'href', 'source'].forEach(function(key) {
-        if (typeof props[key] === 'string') addURL(props[key]);
-      });
-      // Check children props too
-      if (props.children && typeof props.children === 'object' && props.children.props) {
-        var cp = props.children.props;
-        ['src','url','href'].forEach(function(k){ if(typeof cp[k]==='string') addURL(cp[k]); });
-      }
-      fiber = fiber.return;
-      depth++;
+  function addItem(url, label, filename) {
+    if (!url) return;
+    url = url.replace(/&amp;/g, '&').replace(/\u0026/g, '&');
+    if (!/cdn\.discordapp\.com\/attachments\//i.test(url) || !/voice-message\.ogg/i.test(url)) return;
+    if (seen[url]) return;
+    seen[url] = true;
+    if (!label) {
+      fallbackN++;
+      label = 'Voice message ' + fallbackN;
+      filename = 'voice-message-' + fallbackN + '.ogg';
     }
+    items.push({ url: url, label: label, filename: filename });
+  }
+
+  // Primary: ogvjs[src] elements — gives DOM context to read sender + timestamp
+  document.querySelectorAll('ogvjs[src]').forEach(function(el) {
+    var url = el.getAttribute('src');
+    if (!url || !/voice-message\.ogg/i.test(url)) return;
+
+    var li = el.closest('li[id^="chat-messages-"]');
+    var label = null, filename = null;
+
+    if (li) {
+      var senderEl = li.querySelector('[data-text]');
+      var timeEl   = li.querySelector('time[datetime]');
+
+      // Grouped messages (non-groupStart) omit the header — walk back to find it
+      if (!senderEl || !timeEl) {
+        var prev = li.previousElementSibling;
+        while (prev) {
+          if (!senderEl) senderEl = prev.querySelector('[data-text]');
+          if (!timeEl)   timeEl   = prev.querySelector('time[datetime]');
+          if (senderEl && timeEl) break;
+          prev = prev.previousElementSibling;
+        }
+      }
+
+      if (senderEl && timeEl) {
+        var sender   = senderEl.getAttribute('data-text');
+        var datetime = timeEl.getAttribute('datetime');
+        label    = sender + ' \u00B7 ' + fmtDisplay(datetime);
+        filename = sanitizeSender(sender) + '_' + fmtFilePart(datetime) + '.ogg';
+      }
+    }
+
+    addItem(url, label, filename);
   });
 
-  // 6. Last resort: scan all script/JSON blobs on the page for CDN audio URLs
-  var pageText = document.body.innerHTML;
+  // Fallback sweeps for any URLs the primary pass missed
+  document.querySelectorAll('a[href]').forEach(function(a) { addItem(a.href, null, null); });
+  document.querySelectorAll('[src]').forEach(function(el) {
+    if (el.tagName !== 'OGVJS') addItem(el.src || el.getAttribute('src'), null, null);
+  });
   var cdnRe = /https:\/\/cdn\.discordapp\.com\/attachments\/[^\s"'<>]*voice-message\.ogg[^\s"'<>]*/gi;
-  var match;
-  while ((match = cdnRe.exec(pageText)) !== null) { addURL(match[0].replace(/&amp;/g,'&').replace(/\\u0026/g,'&')); }
+  var m;
+  while ((m = cdnRe.exec(document.body.innerHTML)) !== null) {
+    addItem(m[0].replace(/&amp;/g, '&').replace(/\u0026/g, '&'), null, null);
+  }
 
   // Build panel
   var panel = document.createElement('div');
@@ -224,16 +245,15 @@ function bookmarkletSource() {
     'position:fixed', 'top:16px', 'right:16px', 'z-index:2147483647',
     'background:#0d1b2a', 'border:1px solid rgba(201,168,76,0.55)',
     'border-radius:14px', 'padding:18px 20px', 'font-family:system-ui,sans-serif',
-    'min-width:300px', 'max-width:400px', 'box-shadow:0 8px 32px rgba(0,0,0,0.7)',
+    'min-width:300px', 'max-width:420px', 'box-shadow:0 8px 32px rgba(0,0,0,0.7)',
     'color:#f5f0e8'
   ].join(';');
 
-  // Header row
   var hdr = document.createElement('div');
   hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px';
   var title = document.createElement('span');
   title.style.cssText = 'font-size:0.95rem;font-weight:600;color:#e8c96a';
-  title.textContent = '\uD83C\uDF99\uFE0F Voice Messages (' + links.length + ')';
+  title.textContent = '\uD83C\uDF99\uFE0F Voice Messages (' + items.length + ')';
   var closeBtn = document.createElement('button');
   closeBtn.textContent = '\u00D7';
   closeBtn.style.cssText = 'background:none;border:none;color:rgba(245,240,232,0.5);font-size:1.3rem;cursor:pointer;line-height:1;padding:0';
@@ -241,35 +261,53 @@ function bookmarkletSource() {
   hdr.appendChild(title); hdr.appendChild(closeBtn);
   panel.appendChild(hdr);
 
-  if (links.length === 0) {
+  if (items.length === 0) {
     var msg = document.createElement('p');
     msg.style.cssText = 'font-size:0.83rem;color:rgba(245,240,232,0.5);margin:0 0 10px;line-height:1.5';
-    msg.textContent = 'No voice messages found. Checking DOM for clues...';
+    msg.textContent = 'No voice messages found. Scroll them into view, then try again.';
     panel.appendChild(msg);
-
-    // Diagnostic: show what audio-like elements we DID find
-    var diagLines = [];
-    document.querySelectorAll('audio').forEach(function(el,i){ diagLines.push('audio#'+i+' src='+el.src); });
-    document.querySelectorAll('[class*="audio"],[class*="Audio"],[class*="voice"],[class*="Voice"]').forEach(function(el){
-      diagLines.push(el.tagName+'.'+[...el.classList].slice(0,2).join('.'));
-    });
     var diag = document.createElement('pre');
     diag.style.cssText = 'font-size:0.7rem;color:rgba(245,240,232,0.4);overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;margin:0';
-    diag.textContent = diagLines.length ? diagLines.join('\n') : '(no audio or voice-class elements found in DOM)';
+    var diagLines = [];
+    document.querySelectorAll('ogvjs[src]').forEach(function(el,i){ diagLines.push('ogvjs#'+i+' src='+el.getAttribute('src')); });
+    document.querySelectorAll('audio').forEach(function(el,i){ diagLines.push('audio#'+i+' src='+el.src); });
+    diag.textContent = diagLines.length ? diagLines.join('\n') : '(no ogvjs or audio elements found)';
     panel.appendChild(diag);
   } else {
-    links.forEach(function(url, i) {
+    items.forEach(function(item) {
       var row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06)';
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)';
       var lbl = document.createElement('span');
-      lbl.style.cssText = 'font-size:0.8rem;color:rgba(245,240,232,0.6);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
-      lbl.title = url;
-      lbl.textContent = 'Voice message ' + (i + 1);
-      var dl = document.createElement('a');
-      dl.href = url;
-      dl.download = 'voice-message-' + (i + 1) + '.ogg';
-      dl.style.cssText = 'flex-shrink:0;padding:5px 12px;background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.4);border-radius:6px;color:#e8c96a;font-size:0.78rem;text-decoration:none;white-space:nowrap';
+      lbl.style.cssText = 'font-size:0.82rem;color:rgba(245,240,232,0.75);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1';
+      lbl.title = item.filename + '\n' + item.url;
+      lbl.textContent = item.label;
+      var dl = document.createElement('button');
+      dl.style.cssText = 'flex-shrink:0;padding:5px 12px;background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.4);border-radius:6px;color:#e8c96a;font-size:0.78rem;cursor:pointer;white-space:nowrap';
       dl.textContent = '\u2B07 Download';
+      dl.onclick = (function(url, filename) {
+        return function() {
+          dl.textContent = 'Fetching…';
+          dl.disabled = true;
+          fetch(url)
+            .then(function(r) { return r.blob(); })
+            .then(function(blob) {
+              var blobUrl = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = blobUrl;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 10000);
+              dl.textContent = '\u2713 Saved';
+            })
+            .catch(function(err) {
+              dl.textContent = 'Error';
+              dl.disabled = false;
+              console.error('[svenska] download failed', err);
+            });
+        };
+      }(item.url, item.filename));
       row.appendChild(lbl); row.appendChild(dl);
       panel.appendChild(row);
     });
