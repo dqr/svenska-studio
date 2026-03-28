@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Svenska Bookmarklet — Discord Voice Message Downloader</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0d1b2a;
+    --cream: #f5f0e8;
+    --gold: #c9a84c;
+    --gold-light: #e8c96a;
+    --blue-light: #2e5f9e;
+    --border: rgba(201,168,76,0.25);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--navy); color: var(--cream); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: radial-gradient(ellipse 80% 50% at 20% 10%, rgba(46,95,158,0.25) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(201,168,76,0.08) 0%, transparent 50%);
+    pointer-events: none; z-index: 0;
+  }
+  .container { position: relative; z-index: 1; max-width: 680px; margin: 0 auto; padding: 52px 24px 80px; }
+
+  header { text-align: center; margin-bottom: 48px; }
+  .flag-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 18px; }
+  .flag-stripe { width: 36px; height: 3px; border-radius: 2px; }
+  .flag-stripe.blue { background: #006AA7; }
+  .flag-stripe.yellow { background: #FECC02; }
+  h1 { font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 400; color: var(--cream); }
+  h1 em { font-style: italic; color: var(--gold); }
+  .subtitle { margin-top: 8px; font-size: 0.82rem; color: rgba(245,240,232,0.45); font-family: 'DM Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+
+  .card { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 16px; padding: 28px 32px; margin-bottom: 20px; }
+  .card-title { font-family: 'DM Mono', monospace; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--gold); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+  .card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  p { font-size: 0.9rem; line-height: 1.75; color: rgba(245,240,232,0.8); margin-bottom: 12px; }
+  p:last-child { margin-bottom: 0; }
+  ol { padding-left: 22px; }
+  li { font-size: 0.9rem; line-height: 1.9; color: rgba(245,240,232,0.8); }
+  strong { color: var(--cream); }
+  code { font-family: 'DM Mono', monospace; background: rgba(13,27,42,0.7); padding: 2px 7px; border-radius: 4px; color: var(--gold-light); font-size: 0.82rem; }
+
+  /* The drag target bookmarklet button */
+  .bookmarklet-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 28px; background: rgba(13,27,42,0.5); border: 2px dashed rgba(201,168,76,0.3); border-radius: 12px; }
+  .bookmarklet-btn {
+    display: inline-block;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+    color: var(--navy);
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 600;
+    font-size: 1rem;
+    border-radius: 10px;
+    text-decoration: none;
+    box-shadow: 0 4px 20px rgba(201,168,76,0.35);
+    cursor: grab;
+    transition: transform 0.15s, box-shadow 0.15s;
+    user-select: none;
+  }
+  .bookmarklet-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(201,168,76,0.45); }
+  .drag-hint { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: rgba(245,240,232,0.4); text-align: center; letter-spacing: 0.05em; }
+
+  .step-row { display: flex; gap: 14px; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .step-row:last-child { border-bottom: none; }
+  .step-num { width: 26px; height: 26px; border-radius: 50%; background: rgba(201,168,76,0.15); border: 1px solid rgba(201,168,76,0.4); display: flex; align-items: center; justify-content: center; font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--gold); flex-shrink: 0; margin-top: 2px; }
+  .step-text { font-size: 0.9rem; line-height: 1.6; color: rgba(245,240,232,0.8); }
+  .step-text strong { color: var(--cream); }
+
+  .note { background: rgba(46,95,158,0.12); border: 1px solid rgba(46,95,158,0.3); border-radius: 8px; padding: 12px 16px; }
+  .note p { font-size: 0.82rem; color: rgba(245,240,232,0.65); margin: 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="flag-bar">
+      <div class="flag-stripe blue"></div>
+      <div class="flag-stripe yellow"></div>
+      <div class="flag-stripe blue"></div>
+    </div>
+    <h1><em>Svenska</em> Bookmarklet</h1>
+    <p class="subtitle">Discord Voice Message Downloader</p>
+  </header>
+
+  <!-- Install card -->
+  <div class="card">
+    <div class="card-title">Install the Bookmarklet</div>
+    <div class="bookmarklet-wrap">
+      <a class="bookmarklet-btn" id="bm-link" href="#" title="Drag me to your bookmarks bar!">
+        🎙️ Download Discord Audio
+      </a>
+      <p class="drag-hint">⬆ Drag this button to your bookmarks bar<br>(or right-click → Add to Bookmarks)</p>
+    </div>
+  </div>
+
+  <!-- How to use -->
+  <div class="card">
+    <div class="card-title">How to Use</div>
+    <div class="step-row">
+      <div class="step-num">1</div>
+      <div class="step-text">Open <strong>Discord in your browser</strong> and navigate to the <strong>#speak-swedish-with-katrin</strong> channel</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">2</div>
+      <div class="step-text">Scroll to the voice message you want to download</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">3</div>
+      <div class="step-text">Click the <strong>🎙️ Download Discord Audio</strong> bookmark in your bar — a panel will appear listing all voice messages found on the page</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">4</div>
+      <div class="step-text">Click <strong>Download</strong> next to the message you want — the <code>.ogg</code> file saves to your Downloads folder</div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">5</div>
+      <div class="step-text">Drop the file into <strong>Svenska Studio</strong> and transcribe!</div>
+    </div>
+  </div>
+
+  <!-- Notes -->
+  <div class="card">
+    <div class="card-title">Notes &amp; Troubleshooting</div>
+    <div class="note" style="margin-bottom:14px">
+      <p>💡 <strong>Safari users:</strong> Make sure your bookmarks bar is visible — View → Show Favorites Bar (or ⇧⌘B)</p>
+    </div>
+    <div class="note" style="margin-bottom:14px">
+      <p>💡 <strong>No messages found?</strong> Discord loads messages dynamically. Scroll through the channel first so the voice messages are visible on screen, then click the bookmarklet.</p>
+    </div>
+    <div class="note" style="margin-bottom:14px">
+      <p>💡 <strong>Download blocked?</strong> Safari may ask to allow downloads from discord.com — click Allow. This is a one-time prompt.</p>
+    </div>
+    <div class="note">
+      <p>💡 <strong>Links expired?</strong> Discord CDN links expire after a few hours. If you see an error, reload the Discord page and run the bookmarklet again.</p>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Bookmarklet source — written as a plain JS function, then encoded.
+// Do NOT manually escape strings here; encodeURIComponent handles everything.
+function bookmarkletSource() {
+  var PANEL_ID = '__svenska_panel__';
+
+  // Toggle: remove if already open
+  var existing = document.getElementById(PANEL_ID);
+  if (existing) { existing.remove(); return; }
+
+  // Collect OGG/voice URLs from every possible hiding spot Discord uses
+  var seen = {};
+  var links = [];
+
+  function addURL(u) {
+    if (!u) return;
+    u = u.replace(/&amp;/g, '&').replace(/\\u0026/g, '&');
+    if (seen[u]) return;
+    // Only match Discord CDN voice message attachments — must contain /attachments/ and voice-message.ogg
+    if (/cdn\.discordapp\.com\/attachments\//i.test(u) && /voice-message\.ogg/i.test(u)) {
+      seen[u] = true; links.push(u);
+    }
+  }
+
+  // 1. <a href>
+  document.querySelectorAll('a[href]').forEach(function(a) { addURL(a.href); });
+
+  // 2. <audio src> and <audio><source src>
+  document.querySelectorAll('audio').forEach(function(el) {
+    addURL(el.src);
+    el.querySelectorAll('source').forEach(function(s) { addURL(s.src); });
+  });
+
+  // 3. All elements with a src attribute (Discord uses divs with data attrs)
+  document.querySelectorAll('[src]').forEach(function(el) { addURL(el.src || el.getAttribute('src')); });
+
+  // 4. Scan every element's dataset for CDN urls
+  document.querySelectorAll('*').forEach(function(el) {
+    Object.values(el.dataset || {}).forEach(function(v) {
+      if (typeof v === 'string' && /cdn\.discordapp\.com/i.test(v)) addURL(v);
+    });
+  });
+
+  // 5. Walk React fiber tree on known audio container elements
+  // Discord's voice messages have an aria-label or class containing "audioPlayer" / "voice"
+  var candidates = document.querySelectorAll(
+    '[class*="audioPlayer"], [class*="voiceMessage"], [class*="voice-message"], [aria-label*="voice"], [class*="VoiceMessage"]'
+  );
+  candidates.forEach(function(el) {
+    // Traverse React internal fiber to find the src prop
+    var fiberKey = Object.keys(el).find(function(k) { return k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'); });
+    if (!fiberKey) return;
+    var fiber = el[fiberKey];
+    var depth = 0;
+    while (fiber && depth < 40) {
+      var props = fiber.memoizedProps || fiber.pendingProps || {};
+      ['src', 'url', 'href', 'source'].forEach(function(key) {
+        if (typeof props[key] === 'string') addURL(props[key]);
+      });
+      // Check children props too
+      if (props.children && typeof props.children === 'object' && props.children.props) {
+        var cp = props.children.props;
+        ['src','url','href'].forEach(function(k){ if(typeof cp[k]==='string') addURL(cp[k]); });
+      }
+      fiber = fiber.return;
+      depth++;
+    }
+  });
+
+  // 6. Last resort: scan all script/JSON blobs on the page for CDN audio URLs
+  var pageText = document.body.innerHTML;
+  var cdnRe = /https:\/\/cdn\.discordapp\.com\/attachments\/[^\s"'<>]*voice-message\.ogg[^\s"'<>]*/gi;
+  var match;
+  while ((match = cdnRe.exec(pageText)) !== null) { addURL(match[0].replace(/&amp;/g,'&').replace(/\\u0026/g,'&')); }
+
+  // Build panel
+  var panel = document.createElement('div');
+  panel.id = PANEL_ID;
+  panel.style.cssText = [
+    'position:fixed', 'top:16px', 'right:16px', 'z-index:2147483647',
+    'background:#0d1b2a', 'border:1px solid rgba(201,168,76,0.55)',
+    'border-radius:14px', 'padding:18px 20px', 'font-family:system-ui,sans-serif',
+    'min-width:300px', 'max-width:400px', 'box-shadow:0 8px 32px rgba(0,0,0,0.7)',
+    'color:#f5f0e8'
+  ].join(';');
+
+  // Header row
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:12px';
+  var title = document.createElement('span');
+  title.style.cssText = 'font-size:0.95rem;font-weight:600;color:#e8c96a';
+  title.textContent = '\uD83C\uDF99\uFE0F Voice Messages (' + links.length + ')';
+  var closeBtn = document.createElement('button');
+  closeBtn.textContent = '\u00D7';
+  closeBtn.style.cssText = 'background:none;border:none;color:rgba(245,240,232,0.5);font-size:1.3rem;cursor:pointer;line-height:1;padding:0';
+  closeBtn.onclick = function() { panel.remove(); };
+  hdr.appendChild(title); hdr.appendChild(closeBtn);
+  panel.appendChild(hdr);
+
+  if (links.length === 0) {
+    var msg = document.createElement('p');
+    msg.style.cssText = 'font-size:0.83rem;color:rgba(245,240,232,0.5);margin:0 0 10px;line-height:1.5';
+    msg.textContent = 'No voice messages found. Checking DOM for clues...';
+    panel.appendChild(msg);
+
+    // Diagnostic: show what audio-like elements we DID find
+    var diagLines = [];
+    document.querySelectorAll('audio').forEach(function(el,i){ diagLines.push('audio#'+i+' src='+el.src); });
+    document.querySelectorAll('[class*="audio"],[class*="Audio"],[class*="voice"],[class*="Voice"]').forEach(function(el){
+      diagLines.push(el.tagName+'.'+[...el.classList].slice(0,2).join('.'));
+    });
+    var diag = document.createElement('pre');
+    diag.style.cssText = 'font-size:0.7rem;color:rgba(245,240,232,0.4);overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;background:rgba(0,0,0,0.3);padding:8px;border-radius:6px;margin:0';
+    diag.textContent = diagLines.length ? diagLines.join('\n') : '(no audio or voice-class elements found in DOM)';
+    panel.appendChild(diag);
+  } else {
+    links.forEach(function(url, i) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06)';
+      var lbl = document.createElement('span');
+      lbl.style.cssText = 'font-size:0.8rem;color:rgba(245,240,232,0.6);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      lbl.title = url;
+      lbl.textContent = 'Voice message ' + (i + 1);
+      var dl = document.createElement('a');
+      dl.href = url;
+      dl.download = 'voice-message-' + (i + 1) + '.ogg';
+      dl.style.cssText = 'flex-shrink:0;padding:5px 12px;background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.4);border-radius:6px;color:#e8c96a;font-size:0.78rem;text-decoration:none;white-space:nowrap';
+      dl.textContent = '\u2B07 Download';
+      row.appendChild(lbl); row.appendChild(dl);
+      panel.appendChild(row);
+    });
+  }
+  document.body.appendChild(panel);
+}
+
+// Encode and set the href — this is the correct way to build bookmarklets
+var code = bookmarkletSource.toString()
+  .replace(/^function bookmarkletSource\(\)\s*\{/, '')
+  .replace(/\}$/, '')
+  .trim();
+
+document.getElementById('bm-link').href = 'javascript:(function(){' + encodeURIComponent(code) + '})();';
+</script>
+</body>
+</html>

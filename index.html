@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Svenska — Audio Transcription Studio</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0d1b2a;
+    --cream: #f5f0e8;
+    --gold: #c9a84c;
+    --gold-light: #e8c96a;
+    --blue-light: #2e5f9e;
+    --success: #2d6a4f;
+    --border: rgba(201,168,76,0.25);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--navy);
+    color: var(--cream);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% 10%, rgba(46,95,158,0.3) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(201,168,76,0.1) 0%, transparent 50%),
+      repeating-linear-gradient(0deg, transparent, transparent 60px, rgba(255,255,255,0.01) 60px, rgba(255,255,255,0.01) 61px),
+      repeating-linear-gradient(90deg, transparent, transparent 60px, rgba(255,255,255,0.01) 60px, rgba(255,255,255,0.01) 61px);
+    pointer-events: none; z-index: 0;
+  }
+  .container { position: relative; z-index: 1; max-width: 1020px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  /* Header */
+  header { text-align: center; margin-bottom: 48px; }
+  .flag-bar { display: flex; justify-content: center; gap: 6px; margin-bottom: 20px; }
+  .flag-stripe { width: 48px; height: 4px; border-radius: 2px; }
+  .flag-stripe.blue { background: #006AA7; }
+  .flag-stripe.yellow { background: #FECC02; }
+  h1 { font-family: 'Playfair Display', serif; font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 400; color: var(--cream); line-height: 1.1; }
+  h1 em { font-style: italic; color: var(--gold); }
+  .subtitle { margin-top: 10px; font-size: 0.9rem; color: rgba(245,240,232,0.55); font-family: 'DM Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* Cards */
+  .card { background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 16px; padding: 28px 32px; margin-bottom: 20px; backdrop-filter: blur(12px); }
+  .card-title { font-family: 'DM Mono', monospace; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--gold); margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
+  .card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* API keys */
+  .api-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 600px) { .api-grid { grid-template-columns: 1fr; } }
+  .field-group label { display: block; font-size: 0.78rem; color: rgba(245,240,232,0.6); margin-bottom: 6px; font-family: 'DM Mono', monospace; }
+  input[type="password"], input[type="text"] {
+    width: 100%; background: rgba(13,27,42,0.7); border: 1px solid rgba(201,168,76,0.2);
+    border-radius: 8px; padding: 10px 14px; color: var(--cream);
+    font-family: 'DM Mono', monospace; font-size: 0.82rem; transition: border-color 0.2s; outline: none;
+  }
+  input:focus { border-color: var(--gold); }
+
+  /* Upload row */
+  .upload-row { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: stretch; }
+  @media (max-width: 640px) { .upload-row { grid-template-columns: 1fr; } }
+  .upload-zone {
+    border: 2px dashed rgba(201,168,76,0.3); border-radius: 12px; padding: 36px 20px;
+    text-align: center; cursor: pointer; transition: all 0.25s; position: relative; background: rgba(13,27,42,0.3);
+  }
+  .upload-zone:hover, .upload-zone.drag-over { border-color: var(--gold); background: rgba(201,168,76,0.06); }
+  .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 2rem; margin-bottom: 8px; display: block; }
+  .upload-label { font-size: 0.95rem; color: var(--cream); margin-bottom: 4px; }
+  .upload-hint { font-size: 0.75rem; color: rgba(245,240,232,0.4); font-family: 'DM Mono', monospace; }
+  .upload-filename { margin-top: 10px; font-family: 'DM Mono', monospace; font-size: 0.8rem; color: var(--gold-light); }
+  .load-session-zone {
+    border: 2px dashed rgba(46,95,158,0.4); border-radius: 12px; padding: 20px 16px;
+    text-align: center; cursor: pointer; transition: all 0.25s; position: relative;
+    background: rgba(13,27,42,0.3); min-width: 160px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  }
+  .load-session-zone:hover { border-color: var(--blue-light); background: rgba(46,95,158,0.08); }
+  .load-session-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .load-session-zone span:first-child { font-size: 1.5rem; }
+  .load-session-label { font-size: 0.78rem; color: rgba(245,240,232,0.6); font-family: 'DM Mono', monospace; text-align: center; line-height: 1.4; }
+
+  /* Buttons */
+  .btn-process {
+    width: 100%; padding: 15px; background: linear-gradient(135deg, var(--gold) 0%, var(--gold-light) 100%);
+    color: var(--navy); border: none; border-radius: 10px; font-family: 'DM Sans', sans-serif;
+    font-weight: 500; font-size: 1rem; cursor: pointer; letter-spacing: 0.03em; transition: all 0.2s; margin-top: 12px;
+  }
+  .btn-process:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(201,168,76,0.3); }
+  .btn-process:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .btn-action {
+    padding: 9px 18px; background: rgba(201,168,76,0.1); border: 1px solid rgba(201,168,76,0.35);
+    border-radius: 8px; color: var(--gold-light); font-family: 'DM Mono', monospace; font-size: 0.78rem;
+    cursor: pointer; transition: all 0.2s; letter-spacing: 0.05em;
+  }
+  .btn-action:hover { background: rgba(201,168,76,0.2); }
+  .btn-action.primary { background: rgba(201,168,76,0.18); border-color: var(--gold); }
+
+  /* Errors */
+  .error-msg { background: rgba(235,87,87,0.1); border: 1px solid rgba(235,87,87,0.3); border-radius: 8px; padding: 12px 16px; color: #f87171; font-size: 0.88rem; margin-top: 12px; display: none; }
+  .error-msg.active { display: block; }
+
+  /* Progress */
+  .progress-area { display: none; }
+  .progress-area.active { display: block; }
+  .step-list { display: flex; flex-direction: column; gap: 10px; }
+  .step { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-radius: 8px; font-size: 0.88rem; transition: all 0.3s; background: rgba(13,27,42,0.4); border: 1px solid rgba(255,255,255,0.05); }
+  .step.active { border-color: rgba(201,168,76,0.4); background: rgba(201,168,76,0.08); }
+  .step.done { border-color: rgba(45,106,79,0.5); background: rgba(45,106,79,0.1); color: #6fcf97; }
+  .step.error { border-color: rgba(235,87,87,0.4); background: rgba(235,87,87,0.08); color: #f87171; }
+  .step-icon { font-size: 1.1rem; width: 20px; text-align: center; flex-shrink: 0; }
+  .spinner { width: 16px; height: 16px; border: 2px solid rgba(201,168,76,0.3); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Results */
+  .results-area { display: none; }
+  .results-area.active { display: block; }
+
+  /* Audio player */
+  .player-card { background: rgba(13,27,42,0.7); border: 1px solid rgba(201,168,76,0.35); border-radius: 14px; padding: 20px 24px; margin-bottom: 20px; }
+  .player-top { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+  .play-btn { width: 44px; height: 44px; border-radius: 50%; background: linear-gradient(135deg, var(--gold), var(--gold-light)); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: transform 0.15s, box-shadow 0.15s; color: var(--navy); font-size: 1.1rem; }
+  .play-btn:hover { transform: scale(1.07); box-shadow: 0 4px 16px rgba(201,168,76,0.4); }
+  .player-info { flex: 1; min-width: 0; }
+  .player-filename { font-family: 'DM Mono', monospace; font-size: 0.78rem; color: var(--gold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-time { font-family: 'DM Mono', monospace; font-size: 0.82rem; color: rgba(245,240,232,0.5); margin-top: 2px; }
+  .player-speed { background: rgba(201,168,76,0.1); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; color: var(--gold-light); font-family: 'DM Mono', monospace; font-size: 0.78rem; cursor: pointer; transition: background 0.2s; }
+  .player-speed:hover { background: rgba(201,168,76,0.2); }
+  .seek-bar-wrap { position: relative; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; cursor: pointer; }
+  .seek-bar-fill { height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold-light)); border-radius: 3px; width: 0%; transition: width 0.1s linear; pointer-events: none; }
+  .seek-bar-thumb { position: absolute; top: 50%; width: 14px; height: 14px; background: var(--gold-light); border-radius: 50%; transform: translate(-50%, -50%); left: 0%; transition: left 0.1s linear; box-shadow: 0 0 6px rgba(201,168,76,0.5); pointer-events: none; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 18px; background: rgba(13,27,42,0.5); padding: 4px; border-radius: 10px; border: 1px solid var(--border); }
+  .tab { flex: 1; padding: 8px 10px; border: none; border-radius: 7px; background: transparent; color: rgba(245,240,232,0.5); font-family: 'DM Sans', sans-serif; font-size: 0.82rem; cursor: pointer; transition: all 0.2s; }
+  .tab.active { background: rgba(201,168,76,0.15); color: var(--gold-light); border: 1px solid rgba(201,168,76,0.3); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* Synced transcript */
+  .transcript-container { max-height: 480px; overflow-y: auto; padding-right: 4px; }
+  .transcript-container::-webkit-scrollbar { width: 4px; }
+  .transcript-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .seg-row { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 12px; padding: 10px 12px; border-radius: 8px; cursor: pointer; transition: background 0.15s; border: 1px solid transparent; margin-bottom: 4px; align-items: start; }
+  .seg-row:hover { background: rgba(201,168,76,0.06); border-color: rgba(201,168,76,0.15); }
+  .seg-row.active-seg { background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.4); }
+  .seg-time { font-family: 'DM Mono', monospace; font-size: 0.72rem; color: var(--gold); padding-top: 3px; }
+  .seg-sv { font-size: 0.9rem; line-height: 1.6; color: var(--cream); }
+  .seg-en { font-size: 0.88rem; line-height: 1.6; color: rgba(245,240,232,0.6); font-style: italic; }
+  .seg-header { display: grid; grid-template-columns: 64px 1fr 1fr; gap: 12px; padding: 0 12px 8px; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+  .seg-header span { font-family: 'DM Mono', monospace; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--gold); }
+
+  /* Bilingual */
+  .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .side-by-side { grid-template-columns: 1fr; } }
+  .lang-panel { background: rgba(13,27,42,0.5); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .lang-header { padding: 10px 16px; background: rgba(201,168,76,0.08); border-bottom: 1px solid var(--border); font-family: 'DM Mono', monospace; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--gold); }
+  .lang-body { padding: 16px; font-size: 0.9rem; line-height: 1.75; color: var(--cream); white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
+
+  /* Vocab */
+  .vocab-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+  .vocab-card { background: rgba(13,27,42,0.5); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .vocab-sv { font-family: 'Playfair Display', serif; font-size: 1.05rem; color: var(--gold-light); margin-bottom: 3px; }
+  .vocab-pos { font-family: 'DM Mono', monospace; font-size: 0.65rem; color: rgba(245,240,232,0.35); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 4px; }
+  .vocab-en { font-size: 0.88rem; color: var(--cream); }
+  .vocab-example { font-size: 0.78rem; color: rgba(245,240,232,0.45); font-style: italic; border-left: 2px solid var(--border); padding-left: 8px; margin-top: 6px; }
+
+  /* SRT */
+  .srt-content { background: rgba(13,27,42,0.7); border: 1px solid var(--border); border-radius: 10px; padding: 20px; font-family: 'DM Mono', monospace; font-size: 0.78rem; line-height: 1.8; color: rgba(245,240,232,0.75); max-height: 400px; overflow-y: auto; white-space: pre; }
+
+  /* Action row */
+  .action-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+  .divider { height: 1px; background: var(--border); margin: 22px 0; }
+
+  /* Info box */
+  .info-box { background: rgba(46,95,158,0.12); border: 1px solid rgba(46,95,158,0.35); border-radius: 10px; padding: 16px 18px; }
+  .info-box p { font-size: 0.88rem; line-height: 1.7; color: rgba(245,240,232,0.75); }
+  .info-box ol { padding-left: 20px; margin-top: 8px; }
+  .info-box li { font-size: 0.88rem; line-height: 1.9; color: rgba(245,240,232,0.75); }
+  .info-box code { font-family: 'DM Mono', monospace; background: rgba(13,27,42,0.6); padding: 2px 6px; border-radius: 4px; color: var(--gold-light); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="flag-bar">
+      <div class="flag-stripe blue"></div>
+      <div class="flag-stripe yellow"></div>
+      <div class="flag-stripe blue"></div>
+    </div>
+    <h1>Speak Swedish<br><em>with Katrin</em></h1>
+    <p class="subtitle">Audio Transcription &amp; Translation Studio</p>
+  </header>
+
+  <!-- Step 0: Discord instructions -->
+  <div class="card">
+    <div class="card-title">Step 0 — Get Audio from Discord</div>
+    <div class="info-box">
+      <p>Use the <strong>Svenska Bookmarklet</strong> to download voice messages from Discord — open <code>/bookmarklet/</code> to install it. Or use Craig bot for full voice channel recordings.</p>
+      <ol>
+        <li>Visit your Discord channel in the browser, scroll so voice messages are visible</li>
+        <li>Click the bookmarklet — pick the message you want and download it</li>
+        <li>Drop the <code>.ogg</code> file into the upload zone below</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- Step 1: API Keys -->
+  <div class="card">
+    <div class="card-title">Step 1 — API Keys</div>
+    <div class="api-grid">
+      <div class="field-group">
+        <label>OpenAI API Key (Whisper transcription)</label>
+        <input type="password" id="openai-key" placeholder="sk-…" autocomplete="off">
+      </div>
+      <div class="field-group">
+        <label>Anthropic API Key (translation &amp; vocab)</label>
+        <input type="password" id="anthropic-key" placeholder="sk-ant-…" autocomplete="off">
+      </div>
+    </div>
+    <p style="margin-top:10px;font-size:0.73rem;color:rgba(245,240,232,0.3);font-family:'DM Mono',monospace;">Keys stay in your browser — never stored or sent anywhere except the APIs.</p>
+  </div>
+
+  <!-- Step 2: Upload -->
+  <div class="card">
+    <div class="card-title">Step 2 — Audio File or Saved Session</div>
+    <div class="upload-row">
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" id="audio-file" accept="audio/*,.flac,.mp3,.m4a,.wav,.ogg,.webm">
+        <span class="upload-icon">🎙️</span>
+        <p class="upload-label">Drop audio file or click to browse</p>
+        <p class="upload-hint">ogg · mp3 · flac · wav · m4a · webm — max 25 MB</p>
+        <p class="upload-filename" id="upload-filename"></p>
+      </div>
+      <div class="load-session-zone" id="load-session-zone" title="Load a previously saved .svenska session">
+        <input type="file" id="session-file" accept=".svenska,.json">
+        <span>📂</span>
+        <span class="load-session-label">Load saved<br>session<br><span style="color:var(--gold);font-size:0.7rem">.svenska</span></span>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <button class="btn-process" id="process-btn" disabled>
+      Transcribe &amp; Translate →
+    </button>
+    <div class="error-msg" id="error-msg"></div>
+  </div>
+
+  <!-- Progress -->
+  <div class="card progress-area" id="progress-area">
+    <div class="card-title">Processing</div>
+    <div class="step-list">
+      <div class="step" id="step-transcribe"><span class="step-icon">🎙️</span><span>Transcribing Swedish audio with Whisper…</span></div>
+      <div class="step" id="step-translate"><span class="step-icon">🇸🇪</span><span>Translating to English with Claude…</span></div>
+      <div class="step" id="step-vocab"><span class="step-icon">📖</span><span>Extracting vocabulary &amp; highlights…</span></div>
+      <div class="step" id="step-srt"><span class="step-icon">🕐</span><span>Generating .srt subtitle file…</span></div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div class="results-area" id="results-area">
+
+    <!-- Audio player -->
+    <div class="player-card">
+      <div class="player-top">
+        <button class="play-btn" id="play-btn">▶</button>
+        <div class="player-info">
+          <div class="player-filename" id="player-filename">—</div>
+          <div class="player-time" id="player-time">0:00 / 0:00</div>
+        </div>
+        <button class="player-speed" id="speed-btn">1×</button>
+      </div>
+      <div class="seek-bar-wrap" id="seek-bar">
+        <div class="seek-bar-fill" id="seek-fill"></div>
+        <div class="seek-bar-thumb" id="seek-thumb"></div>
+      </div>
+      <audio id="audio-el"></audio>
+    </div>
+
+    <!-- Tabs + content -->
+    <div class="card" style="padding-top:24px">
+      <div class="tabs">
+        <button class="tab active" data-tab="tab-synced">▶ Synced</button>
+        <button class="tab" data-tab="tab-bilingual">Side-by-Side</button>
+        <button class="tab" data-tab="tab-vocab">Vocabulary</button>
+        <button class="tab" data-tab="tab-srt">.srt</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-synced">
+        <div class="seg-header">
+          <span>Time</span><span>🇸🇪 Svenska</span><span>🇬🇧 English</span>
+        </div>
+        <div class="transcript-container">
+          <div id="result-segments"></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-bilingual">
+        <div class="side-by-side">
+          <div class="lang-panel">
+            <div class="lang-header">🇸🇪 Svenska</div>
+            <div class="lang-body" id="result-sv"></div>
+          </div>
+          <div class="lang-panel">
+            <div class="lang-header">🇬🇧 English</div>
+            <div class="lang-body" id="result-en"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-vocab">
+        <div class="vocab-grid" id="result-vocab"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-srt">
+        <div class="srt-content" id="result-srt"></div>
+      </div>
+
+      <div class="action-row">
+        <button class="btn-action primary" id="btn-save">💾 Save Session (.svenska)</button>
+        <button class="btn-action" id="btn-srt">⬇ Download .srt</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script type="module">
+import { initPlayer, mountAudio, togglePlay, cycleSpeed, seekToSeg, setSegments } from './src/player.js';
+import { transcribe } from './src/transcribe.js';
+import { translateSegments, extractVocab } from './src/translate.js';
+import { saveSession, loadSession, buildSrt, downloadSrt } from './src/session.js';
+import { setStep, showError, clearError, showSection, hideSection, showTab, renderResults, showFilename, updateProcessBtn } from './src/ui.js';
+
+// ── State ───────────────────────────────────────────────────────────────────
+let selectedFile = null;
+let sessionData = { whisperSegments: [], segmentTranslations: [], vocabItems: [], srtContent: '' };
+
+// ── Init ────────────────────────────────────────────────────────────────────
+initPlayer();
+
+// Tab clicks
+document.querySelectorAll('.tab[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => showTab(btn.dataset.tab));
+});
+
+// Play / speed buttons
+document.getElementById('play-btn').addEventListener('click', togglePlay);
+document.getElementById('speed-btn').addEventListener('click', cycleSpeed);
+
+// Process button
+document.getElementById('process-btn').addEventListener('click', runPipeline);
+
+// Save / download buttons
+document.getElementById('btn-save').addEventListener('click', () =>
+  saveSession(sessionData, selectedFile)
+);
+document.getElementById('btn-srt').addEventListener('click', () =>
+  downloadSrt(sessionData.srtContent, selectedFile?.name?.replace(/\.[^.]+$/, '') || 'lesson')
+);
+
+// ── File upload ─────────────────────────────────────────────────────────────
+const audioInput = document.getElementById('audio-file');
+const uploadZone = document.getElementById('upload-zone');
+
+function handleAudioFile(file) {
+  selectedFile = file;
+  showFilename(file);
+  updateProcessBtn(true, hasKeys());
+}
+
+audioInput.addEventListener('change', e => { if (e.target.files[0]) handleAudioFile(e.target.files[0]); });
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag-over');
+  if (e.dataTransfer.files[0]) handleAudioFile(e.dataTransfer.files[0]);
+});
+
+// ── Session load ────────────────────────────────────────────────────────────
+const sessionInput = document.getElementById('session-file');
+const sessionZone = document.getElementById('load-session-zone');
+
+async function handleSessionFile(file) {
+  try {
+    const { session, audioFile } = await loadSession(file);
+    sessionData = session;
+    setSegments(session.whisperSegments);
+    if (audioFile) {
+      selectedFile = audioFile;
+      showFilename(audioFile);
+      mountAudio(audioFile);
+    }
+    renderResults(session.whisperSegments, session.segmentTranslations, session.vocabItems, session.srtContent, seekToSeg);
+    hideSection('progress-area');
+    showSection('results-area');
+  } catch (e) {
+    alert('Could not load session: ' + e.message);
+  }
+}
+
+sessionInput.addEventListener('change', e => { if (e.target.files[0]) handleSessionFile(e.target.files[0]); });
+sessionZone.addEventListener('dragover', e => e.preventDefault());
+sessionZone.addEventListener('drop', e => {
+  e.preventDefault();
+  if (e.dataTransfer.files[0]) handleSessionFile(e.dataTransfer.files[0]);
+});
+
+// ── API key watchers ────────────────────────────────────────────────────────
+document.getElementById('openai-key').addEventListener('input', () => updateProcessBtn(!!selectedFile, hasKeys()));
+document.getElementById('anthropic-key').addEventListener('input', () => updateProcessBtn(!!selectedFile, hasKeys()));
+
+function hasKeys() {
+  return !!(document.getElementById('openai-key').value.trim() &&
+            document.getElementById('anthropic-key').value.trim());
+}
+
+// ── Main pipeline ───────────────────────────────────────────────────────────
+async function runPipeline() {
+  const openaiKey = document.getElementById('openai-key').value.trim();
+  const anthropicKey = document.getElementById('anthropic-key').value.trim();
+
+  clearError();
+  updateProcessBtn(false, false);
+  showSection('progress-area');
+  hideSection('results-area');
+
+  try {
+    // 1. Transcribe
+    setStep('step-transcribe', 'active', 'Transcribing Swedish audio with Whisper…');
+    const segments = await transcribe(selectedFile, openaiKey, msg =>
+      setStep('step-transcribe', 'active', msg)
+    );
+    setStep('step-transcribe', 'done', `Transcribed ${segments.length} segments`);
+
+    const fullSwedish = segments.map(s => s.text.trim()).join('\n');
+
+    // 2. Translate
+    setStep('step-translate', 'active', 'Translating to English with Claude…');
+    const translations = await translateSegments(segments, anthropicKey, msg =>
+      setStep('step-translate', 'active', msg)
+    );
+    setStep('step-translate', 'done', 'Translation complete');
+
+    // 3. Vocab
+    setStep('step-vocab', 'active', 'Extracting vocabulary…');
+    let vocab = [];
+    try {
+      vocab = await extractVocab(fullSwedish, anthropicKey, msg =>
+        setStep('step-vocab', 'active', msg)
+      );
+      setStep('step-vocab', 'done', `${vocab.length} vocabulary items extracted`);
+    } catch (e) {
+      setStep('step-vocab', 'error', 'Vocab extraction failed: ' + e.message);
+    }
+
+    // 4. SRT
+    setStep('step-srt', 'active', 'Generating .srt…');
+    const srt = buildSrt(segments, translations);
+    setStep('step-srt', 'done', '.srt file generated');
+
+    // Store and render
+    sessionData = { whisperSegments: segments, segmentTranslations: translations, vocabItems: vocab, srtContent: srt };
+    setSegments(segments);
+    mountAudio(selectedFile);
+    renderResults(segments, translations, vocab, srt, seekToSeg);
+    showSection('results-area');
+
+  } catch (e) {
+    showError(e.message);
+  } finally {
+    updateProcessBtn(!!selectedFile, hasKeys());
+  }
+}
+</script>
+</body>
+</html>
